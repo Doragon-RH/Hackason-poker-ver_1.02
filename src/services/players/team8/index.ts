@@ -140,10 +140,11 @@ class TsPlayer {
         if (!data.minBetPoint) return 0;
         // 最低賭けポイントが所持ポイントの1割以上の場合はドロップする
         if (point / 10 < data.minBetPoint) return -1;
+        else return 0;
       } else if (currnetHandValue <= 4) {
         // スリーカード以下の場合
         // 所持ポイントに余裕があればコール
-        if (point / 5 < data.minBetPoint) return 0;
+        if (point / 4 < data.minBetPoint) return 0;
         // そうでなければドロップ
         return -1;
       } else if (canRaise) {
@@ -171,13 +172,13 @@ class TsPlayer {
     if (currnetHandValue <= 4) {
       // スリーカードの場合
       // 所持ポイントに余裕があれば多めにレイズ
-      if (point / 15 > data.minBetPoint) return this.betUnit * 4500;
+      if (point / 15 > data.minBetPoint) return this.betUnit * 4000;
       else if (point / 3 > data.minBetPoint) return 0;
       // そうでなければドロップ
       return -1;
     }
     if (canRaise) {
-      return minPointPlayer?.point ?? 0;
+      return 15000;
     }
 
     this.logger?.info(
