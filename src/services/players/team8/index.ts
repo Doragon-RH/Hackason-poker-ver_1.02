@@ -1,24 +1,8 @@
 import type winston from "winston";
 
 import { getLogger } from "@/libs/logger";
-import { GameInfo, Hand } from "@/schema/game";
-import { randomByNumber } from "@/utils/game";
+import { GameInfo } from "@/schema/game";
 import { evaluateHand } from "@/utils/hand";
-
-// export const HAND_RANK: { [key in Hand]: string } = {
-//   [Hand.Drop]: 'Drop',
-//   [Hand.HighCard]: 'High Card',
-//   [Hand.OnePair]: 'One Pair',
-//   [Hand.TwoPair]: 'Two Pair',
-//   [Hand.ThreeOfAKind]: 'Three of a Kind',
-//   [Hand.Straight]: 'Straight',
-//   [Hand.Flush]: 'Flush',
-//   [Hand.FullHouse]: 'Full House',
-//   [Hand.FourOfAKind]: 'Four of a Kind',
-//   [Hand.StraightFlush]: 'Straight Flush',
-//   [Hand.RoyalStraightFlush]: 'Royal Straight Flush',
-// };
-// //これでいいのか要確認
 class TsPlayer {
   private logger: winston.Logger | null | undefined; // player logger
 
@@ -111,7 +95,43 @@ class TsPlayer {
         `${this.name} info. point: ${self?.point}, betPoint: ${self?.round.betPoint}, currentHandValue: ${currnetHandValue}`
       )
     );
+    // 各プレイヤーの情報を格納する配列
+    const playersInfo: { name: string; point: number; betPoint: number }[] = [];
 
+    // 各プレイヤーの情報をログに出力し、配列に追加する
+    Object.values(data.players).forEach((player) => {
+      const playerInfo = {
+        name: player.name,
+        point: player.point,
+        betPoint: player.round.betPoint,
+      };
+      // 配列に追加
+      playersInfo.push(playerInfo);
+      // playerInfoをログに出力
+      this.logger?.debug(
+        this.formattedLog(
+          `Player bbbbbbbbbbbinfo: ${JSON.stringify(playerInfo)}`
+        )
+      );
+    });
+    // pointが一番小さいプレイヤーを見つける
+    // pointが0のプレイヤーを除外し、残りのプレイヤーの中でpointが一番小さいプレイヤーを見つける
+    const minPointPlayer = playersInfo
+      .filter((player) => player.point > 0) // pointが0のプレイヤーを除外
+      .reduce((minPlayer, currentPlayer) => {
+        return currentPlayer.point < minPlayer.point
+          ? currentPlayer
+          : minPlayer;
+      }, playersInfo[0]);
+    // playerInfoをログに出力
+    this.logger?.debug(
+      this.formattedLog(`Player 小さい: ${JSON.stringify(minPointPlayer)}`)
+    );
+    // pointをnumber型として使用する
+    const smallestPoint: number = minPointPlayer.point;
+    this.logger?.debug(
+      this.formattedLog(`Player 小さい数字: ${JSON.stringify(smallestPoint)}`)
+    );
     // 1回目のベットフェーズの場合
     if (data.phase === "bet-1") {
       // 役なしの場合
@@ -123,13 +143,12 @@ class TsPlayer {
       } else if (currnetHandValue <= 4) {
         // スリーカード以下の場合
         // 所持ポイントに余裕があればコール
-        if (canRaise) return 0;
+        if (point / 5 < data.minBetPoint) return 0;
         // そうでなければドロップ
         return -1;
       } else if (canRaise) {
         // ストレート以上の場合、レイズ可能であれば手の強さに応じてレイズ幅を釣り上げてベッドする
-        return this.betUnit * 3000;
-        currnetHandValue;
+        return this.betUnit * 800 * currnetHandValue;
       }
       return 0;
     }
@@ -143,7 +162,7 @@ class TsPlayer {
       // スリーカード以下の場合
       // 所持ポイントに余裕があればコール
       if (canRaise) {
-        if (point / 8 < data.minBetPoint) return -1;
+        if (point / 4 < data.minBetPoint) return -1;
         return 0;
       }
       // そうでなければドロップ
@@ -152,82 +171,21 @@ class TsPlayer {
     if (currnetHandValue <= 4) {
       // スリーカードの場合
       // 所持ポイントに余裕があれば多めにレイズ
-      if (canRaise) return this.betUnit * 4500;
+      if (point / 15 > data.minBetPoint) return this.betUnit * 4500;
+      else if (point / 3 > data.minBetPoint) return 0;
       // そうでなければドロップ
       return -1;
     }
     if (canRaise) {
-      return this.betUnit * 18000;
-      currnetHandValue;
+      return minPointPlayer?.point ?? 0;
     }
 
-    // ドロップ宣言をするかを決める（このプログラムでは最低賭けポイントが初期ポイントの半分を超えていたらドロップする）
-    // if (data.minBetPoint > data.initialPoint / 2) return -1;  ここを変更
-    // ドロップ宣言をするかを決める（このプログラムでは最低賭けポイントが初期ポイントの半分を超えていてかつhandrankがnopairの場合ドロップする）
-    // const self = data.players[this.name]; // 自身のデータ
-    // const self_nu = data.players[this.name]; // 自身のデータ
-    // const cards = self_nu?.round.cards ?? [];
-    // const changeCards = this.getChangeCards(cards);
-    // if (
-    //   data.minBetPoint >= data.initialPoint / 2 &&
-    //   changeCards.every((card) => !card.isHold)
-    // ) {
-    //   if (Math.random() < 0.95) {
-    //     return -1;
-    //   }
-    // }
-
-    // ここにフォール度条件の追加を記述すべし
-    // const self = data.players[this.name]; // 自身のデータ
-    // const diff = data.minBetPoint - (self?.round.betPoint ?? 0); // 現在の最低賭けポイントと既に賭けたポイントとの差額
     this.logger?.info(
       this.formattedLog(
         `my cards: ${JSON.stringify(self?.round.cards)}, diff: ${diff}`
       )
     );
-
-    // const point = self?.point ?? 0; // 所持ポイント
-    // const stack = point - diff; // 自由に使用できるポイント
-    // const canRaise = stack > 0; // 自由に使用できるポイントが1以上あればレイズが宣言できる
-    // //追記ゾーン
-    // const canbet =  stack > 0; // 自由に使用できるポイントが1以上あればベットが宣言できる
-    // if (canbet) {
-    //   // ベットが宣言できる場合
-    //   if (data.phase === "bet-1") {
-    //     // 1回目のベットフェーズ
-    //     // このプログラムでは1回目のベットフェーズで、誰も賭けていなければベットを行う
-    //     //if (!data.minBetPoint) return this.betUnit;
-    //     if (canbet) {
-    //       if (this.name.HAND_RANK === 'High Card') {
-    //           return -1;
-    //       } else if (this.name.HAND_RANK === 'One Pair') {
-    //           return this.betUnit;
-    //       } else if (this.name.HAND_RANK === 'Two Pair') {
-    //           return this.betUnit * 2;
-    //       } else {
-    //           return this.betUnit * 3;
-    //       }
-    //   }
-
-    //   } else if (data.phase === "bet-2") {
-    //     // 2回目のベットフェーズ
-    //     // このプログラムでは2回目のベットフェーズで、初期ポイントの1/10以上の値が賭けられていなければレイズを宣言する
-    //     //if (data.minBetPoint < data.initialPoint / 10) return this.betUnit; // stackがbetUnit賭けポイントを追加する単位より大きければレイズ、小さければオール・インとなる（このプログラムではレイズを宣言する時betPoint分のポイントを追加する）
-    //     if (canbet) {
-    //       if (this.name.HAND_RANK === 'High Card') {
-    //           return -1;
-    //       } else if (this.name.HAND_RANK === 'One Pair') {
-    //           return this.betUnit;
-    //       } else if (this.name.HAND_RANK === 'Two Pair') {
-    //           return this.betUnit * 2;
-    //       } else {
-    //           return this.betUnit * 3;
-    //       }
-    //   }
-    // }
-
-    // レイズが宣言できない時 チェック/コール or オール・イン
-    const declareAllIn = 2 < 1; // オール・インを宣言するか（このプログラムでは1/1000の確率でオール・インを宣言する）
+    const declareAllIn = false; // オール・インを宣言するか（このプログラムでは1/1000の確率でオール・インを宣言する）
     return declareAllIn ? stack : 0; // オール・インまたはコール
   }
 
